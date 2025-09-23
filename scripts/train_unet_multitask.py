@@ -349,6 +349,8 @@ if __name__ == '__main__':
     # Model
     model = UNet1D_MTL(in_ecg_channels=1, num_seg_classes=4, num_rhythms=len(RHYTHMS),
                        use_bn=args.use_batchnorm, p_drop=args.dropout)
+    
+    print("Class weights:", class_weights.tolist() if class_weights is not None else None) # print class weights
 
     # Train
     train(model, loaders, args.output_dir, class_weights=class_weights)
