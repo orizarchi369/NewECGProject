@@ -23,6 +23,8 @@ ap.add_argument('--tol_samples', type=int, default=6, help='±N for tolerant F1 
 ap.add_argument('--report_unmasked_strict_wF1', action='store_true',
                 help='Also compute strict weighted F1 without masking (for apples-to-apples with old runs)')
 ap.add_argument('--quiet', action='store_true')
+ap.add_argument('--use_batchnorm', action='store_true')
+ap.add_argument('--dropout', type=float, default=0.0)
 args = ap.parse_args()
 
 os.makedirs(args.out_dir, exist_ok=True)
@@ -206,7 +208,7 @@ def main():
                         persistent_workers=(args.num_workers>0))
 
     # Model
-    model = UNet1D_MTL()
+    model = UNet1D_MTL(use_bn=args.use_batchnorm, p_drop=args.dropout)
     sd = torch.load(args.model_path, map_location='cpu')
     model.load_state_dict(sd, strict=True)
     model = model.to(device).eval()
