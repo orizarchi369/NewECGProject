@@ -149,7 +149,7 @@ def main():
         picks = np.random.choice(indices, size=take, replace=False)
         for j, idx in enumerate(picks):
             sig, lab, rid_, msk, name = ds[idx]
-            sigT = sig.unsqueeze(0).to(device)  # [1,1,L]
+            sigT = torch.from_numpy(sig).float().unsqueeze(0).unsqueeze(0).to(device)  # [1,1,L]
             cond = F.one_hot(torch.tensor([rid_], device=device), num_classes=len(RHYTHMS)).float()
             with torch.no_grad():
                 logits = model(sigT, cond)
