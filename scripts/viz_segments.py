@@ -156,7 +156,7 @@ def main():
                 pred = torch.argmax(logits, dim=1).squeeze(0).cpu().numpy()
             out_png = os.path.join(args.out_dir, f"{RHYTHMS[rid]}_{j+1}_{name.replace('.npz','')}.png")
             title = f"{name} | rhythm={RHYTHMS[rid]}"
-            plot_example(sig.numpy(), lab.numpy(), pred, msk.numpy(), out_png, title)
+            plot_example(sig, lab, pred, msk, out_png, title)
 
 if __name__ == '__main__':
     main()
