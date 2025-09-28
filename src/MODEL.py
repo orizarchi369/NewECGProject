@@ -49,8 +49,15 @@ class UNet1D(nn.Module):
 
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
-        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)  # (B, embed_dim, L)
-        x = torch.cat([x_ecg, embed], dim=1)  # Conditioning concat
+        # Pad to multiple of 16 (for 4 pools)
+        div_factor = 16
+        pad_total = (div_factor - (L % div_factor)) % div_factor
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        x_ecg = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
+
+        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg.size(2))
+        x = torch.cat([x_ecg, embed], dim=1)
 
         # Encoder
         e1 = self.enc1(x)
@@ -81,5 +88,8 @@ class UNet1D(nn.Module):
                 if rid[i].item() in P_ABSENT_IDS:
                     mask[i] = True
             seg_logits[mask, 1, :] = -1e9  # Low value for P channel
+
+        # Crop back to original L
+        seg_logits = seg_logits[:, :, pad_left:pad_left + L]
 
         return seg_logits
