@@ -72,8 +72,8 @@ def is_colab():
 
 def adjust_paths_for_colab(args):
     if is_colab():
-        from google.colab import drive
-        drive.mount('/content/drive')
+        #from google.colab import drive
+        #drive.mount('/content/drive')
         args.data_dir = DRIVE_DATA_DIR
         args.ann_dir = DRIVE_ANN_DIR
         args.split_dir = DRIVE_SPLIT_DIR
