@@ -11,8 +11,8 @@ class ECGSegments(Dataset):
         self.files = []
         self.rhythm_ids = []
         for rec in record_ids:
-            signal_path = os.path.join(data_dir, f"{rec}.csv")
-            ann_path = os.path.join(ann_dir, f"{rec}_ii.txt")  # Assume naming
+            signal_path = os.path.join(data_dir, f"{rec}_lead_ii_processed.csv")
+            ann_path = os.path.join(ann_dir, f"{rec}.ii.txt")
             if os.path.exists(signal_path) and os.path.exists(ann_path):
                 _, rhythm = parse_record_and_rhythm_from_name(signal_path)
                 if rhythm in RHYTHM_TO_ID:  # Skip invalid
