@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from CONFIG import P_ABSENT_IDS
 
 def ce_loss_masked(logits, targets, mask, class_weights=None, p_absent_mask=None):
-    ce = F.cross_entropy(logits, targets, weight=class_weights, reduction='none')  # [B,L]
+    ce = F.cross_entropy(logits, targets, weight=class_weights, reduction='none') + 1e-8  # [B,L]
     if p_absent_mask is not None:
         # Zero loss for P in absent rhythms (expand to L)
         p_absent = p_absent_mask.unsqueeze(-1).expand(-1, ce.size(1)).float()
@@ -28,7 +28,7 @@ def dice_loss_multiclass_masked(logits, targets, mask, exclude_bg=True, p_absent
             p_absent = p_absent_mask.unsqueeze(-1).expand(-1, L).float()
             p = p * (1 - p_absent)
             t = t * (1 - p_absent)
-        num = 2.0 * (p * t).sum(dim=1)
-        den = (p + t).sum(dim=1).clamp_min(eps)
+        num = 2.0 * (p * t).sum(dim=1) + 1e-8
+        den = (p + t).sum(dim=1) + 1e-8
         dices.append(1.0 - (num / den).mean())  # Avg per batch
     return sum(dices) / len(dices)

@@ -96,6 +96,7 @@ class UNet1D(nn.Module):
             e1 = F.pad(e1, (crop_left, crop_right), mode='replicate')
         d2 = self.dec2(torch.cat([d2, e1], dim=1))
         seg_logits = self.out(d2)
+        seg_logits = torch.clamp(seg_logits, -100, 100)
 
         # Pre-softmax P suppression if rhythm in P_ABSENT and suppress_p
         if suppress_p:
