@@ -49,8 +49,9 @@ class UNet1D(nn.Module):
 
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
-        # Pad to next power of 2 (for 4 pools, 5000 → 8192)
-        pad_total = (8192 - L)  # Next power of 2 after 5000
+        # Calculate padding to nearest multiple of 16 (for 4 pools)
+        pool_factor = 16  # Based on 4 MaxPool2d layers
+        pad_total = ((L + pool_factor - 1) // pool_factor) * pool_factor - L
         pad_left = pad_total // 2
         pad_right = pad_total - pad_left
         x_ecg_padded = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
@@ -58,26 +59,42 @@ class UNet1D(nn.Module):
         embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg_padded.size(2))
         x = torch.cat([x_ecg_padded, embed], dim=1)
 
-        # Encoder with explicit length tracking
+        # Encoder with length tracking
         e1 = self.enc1(x)
         e2 = self.enc2(self.pool(e1))
         e3 = self.enc3(self.pool(e2))
         e4 = self.enc4(self.pool(e3))
         e5 = self.enc5(self.pool(e4))
 
-        # Decoder with precise upsampling
+        # Decoder with precise length restoration
         d5 = self.up5(e5)
-        e4_up = F.interpolate(e4, size=d5.size(2), mode='linear', align_corners=False)
-        d5 = self.dec5(torch.cat([d5, e4_up], dim=1))
+        crop_amount = d5.size(2) - e4.size(2)  # Adjust for pooling mismatch
+        if crop_amount > 0:
+            crop_left = crop_amount // 2
+            crop_right = crop_amount - crop_left
+            e4 = F.pad(e4, (crop_left, crop_right), mode='replicate')
+        d5 = self.dec5(torch.cat([d5, e4], dim=1))
         d4 = self.up4(d5)
-        e3_up = F.interpolate(e3, size=d4.size(2), mode='linear', align_corners=False)
-        d4 = self.dec4(torch.cat([d4, e3_up], dim=1))
+        crop_amount = d4.size(2) - e3.size(2)
+        if crop_amount > 0:
+            crop_left = crop_amount // 2
+            crop_right = crop_amount - crop_left
+            e3 = F.pad(e3, (crop_left, crop_right), mode='replicate')
+        d4 = self.dec4(torch.cat([d4, e3], dim=1))
         d3 = self.up3(d4)
-        e2_up = F.interpolate(e2, size=d3.size(2), mode='linear', align_corners=False)
-        d3 = self.dec3(torch.cat([d3, e2_up], dim=1))
+        crop_amount = d3.size(2) - e2.size(2)
+        if crop_amount > 0:
+            crop_left = crop_amount // 2
+            crop_right = crop_amount - crop_left
+            e2 = F.pad(e2, (crop_left, crop_right), mode='replicate')
+        d3 = self.dec3(torch.cat([d3, e2], dim=1))
         d2 = self.up2(d3)
-        e1_up = F.interpolate(e1, size=d2.size(2), mode='linear', align_corners=False)
-        d2 = self.dec2(torch.cat([d2, e1_up], dim=1))
+        crop_amount = d2.size(2) - e1.size(2)
+        if crop_amount > 0:
+            crop_left = crop_amount // 2
+            crop_right = crop_amount - crop_left
+            e1 = F.pad(e1, (crop_left, crop_right), mode='replicate')
+        d2 = self.dec2(torch.cat([d2, e1], dim=1))
         seg_logits = self.out(d2)
 
         # Pre-softmax P suppression if rhythm in P_ABSENT and suppress_p
@@ -88,7 +105,7 @@ class UNet1D(nn.Module):
                     mask[i] = True
             seg_logits[mask, 1, :] = -1e9  # Low value for P channel
 
-        # Crop back to original L (adjust based on padding)
+        # Crop back to original L
         seg_logits = seg_logits[:, :, pad_left:pad_left + L]
 
         return seg_logits
