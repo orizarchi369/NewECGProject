@@ -49,36 +49,35 @@ class UNet1D(nn.Module):
 
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
-        # Pad to multiple of 16 (for 4 pools)
-        div_factor = 16
-        pad_total = (div_factor - (L % div_factor)) % div_factor
+        # Pad to next power of 2 (for 4 pools, 5000 → 8192)
+        pad_total = (8192 - L)  # Next power of 2 after 5000
         pad_left = pad_total // 2
         pad_right = pad_total - pad_left
-        x_ecg = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
+        x_ecg_padded = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
 
-        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg.size(2))
-        x = torch.cat([x_ecg, embed], dim=1)
+        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg_padded.size(2))
+        x = torch.cat([x_ecg_padded, embed], dim=1)
 
-        # Encoder
+        # Encoder with explicit length tracking
         e1 = self.enc1(x)
         e2 = self.enc2(self.pool(e1))
         e3 = self.enc3(self.pool(e2))
         e4 = self.enc4(self.pool(e3))
         e5 = self.enc5(self.pool(e4))
 
-        # Decoder
+        # Decoder with precise upsampling
         d5 = self.up5(e5)
-        e4 = F.interpolate(e4, size=d5.size(2), mode='linear', align_corners=False)
-        d5 = self.dec5(torch.cat([d5, e4], dim=1))
+        e4_up = F.interpolate(e4, size=d5.size(2), mode='linear', align_corners=False)
+        d5 = self.dec5(torch.cat([d5, e4_up], dim=1))
         d4 = self.up4(d5)
-        e3 = F.interpolate(e3, size=d4.size(2), mode='linear', align_corners=False)
-        d4 = self.dec4(torch.cat([d4, e3], dim=1))
+        e3_up = F.interpolate(e3, size=d4.size(2), mode='linear', align_corners=False)
+        d4 = self.dec4(torch.cat([d4, e3_up], dim=1))
         d3 = self.up3(d4)
-        e2 = F.interpolate(e2, size=d3.size(2), mode='linear', align_corners=False)
-        d3 = self.dec3(torch.cat([d3, e2], dim=1))
+        e2_up = F.interpolate(e2, size=d3.size(2), mode='linear', align_corners=False)
+        d3 = self.dec3(torch.cat([d3, e2_up], dim=1))
         d2 = self.up2(d3)
-        e1 = F.interpolate(e1, size=d2.size(2), mode='linear', align_corners=False)
-        d2 = self.dec2(torch.cat([d2, e1], dim=1))
+        e1_up = F.interpolate(e1, size=d2.size(2), mode='linear', align_corners=False)
+        d2 = self.dec2(torch.cat([d2, e1_up], dim=1))
         seg_logits = self.out(d2)
 
         # Pre-softmax P suppression if rhythm in P_ABSENT and suppress_p
@@ -89,7 +88,7 @@ class UNet1D(nn.Module):
                     mask[i] = True
             seg_logits[mask, 1, :] = -1e9  # Low value for P channel
 
-        # Crop back to original L
+        # Crop back to original L (adjust based on padding)
         seg_logits = seg_logits[:, :, pad_left:pad_left + L]
 
         return seg_logits
