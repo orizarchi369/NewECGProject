@@ -9,7 +9,7 @@ class ConvBnRelu1d(nn.Module):
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
         self.bn = nn.BatchNorm1d(out_channels)
         self.relu = nn.LeakyReLU()
-        self.do = nn.Dropout1d(0.2)  # Adjust dropout if needed
+        self.do = nn.Dropout1d(0.2)
 
     def forward(self, x):
         x = self.conv(x)
@@ -45,7 +45,7 @@ class StackDecoder3p(nn.Module):
         return x
 
 class UNet3p(nn.Module):
-    def __init__(self, n_channels=4, embed_dim=EMBED_DIM, use_bn=True, p_drop=0.2):
+    def __init__(self, n_channels=4, embed_dim=EMBED_DIM):
         super().__init__()
         filters = [n_channels * (2 ** n) for n in range(5)]  # [4,8,16,32,64]
         filters_skip = filters[0]  # 4
@@ -65,12 +65,6 @@ class UNet3p(nn.Module):
         self.up1 = StackDecoder3p(filters[:1] + [filters_decoder] * 3 + filters[4:], filters_skip, filters_decoder)
         self.segment = nn.Conv1d(filters_decoder, NUM_CLASSES, kernel_size=1)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv1d):
-                nn.init.kaiming_normal_(m.weight)
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
         embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)
@@ -83,7 +77,7 @@ class UNet3p(nn.Module):
         X_enc4, x = self.down4(x)
         X_enc5 = self.middle(x)
 
-        # Decoder with full-scale skips
+        # Decoder
         X_dec5 = X_enc5
         X_dec4 = self.up4(
             F.max_pool1d(X_enc1, kernel_size=8, stride=8),
@@ -115,7 +109,7 @@ class UNet3p(nn.Module):
         )
         seg_logits = self.segment(X_dec1)
 
-        # Pre-softmax P suppression if rhythm in P_ABSENT and suppress_p
+        # Pre-softmax P suppression
         if suppress_p:
             mask = torch.zeros(B, dtype=torch.bool, device=seg_logits.device)
             for i in range(B):
