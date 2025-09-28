@@ -65,6 +65,12 @@ class UNet3p(nn.Module):
         self.up1 = StackDecoder3p(filters[:1] + [filters_decoder] * 3 + filters[4:], filters_skip, filters_decoder)
         self.segment = nn.Conv1d(filters_decoder, NUM_CLASSES, kernel_size=1)
 
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
         embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)
