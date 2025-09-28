@@ -3,100 +3,117 @@ import torch.nn as nn
 import torch.nn.functional as F
 from CONFIG import EMBED_DIM, NUM_RHYTHMS, NUM_CLASSES, P_ABSENT_IDS
 
-class ConvBlock1D(nn.Module):
-    def __init__(self, in_ch, out_ch, use_bn=False, p_drop=0.0):
+class ConvBnRelu1d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
         super().__init__()
-        layers = [nn.Conv1d(in_ch, out_ch, kernel_size=3, padding=1)]
-        if use_bn: layers.append(nn.BatchNorm1d(out_ch))
-        layers.append(nn.ReLU(inplace=True))
-        if p_drop > 0: layers.append(nn.Dropout(p_drop))
-        self.net = nn.Sequential(*layers)
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.bn = nn.BatchNorm1d(out_channels)
+        self.relu = nn.LeakyReLU()
+        self.do = nn.Dropout1d(0.2)  # Adjust dropout if needed
 
     def forward(self, x):
-        return self.net(x)
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        x = self.do(x)
+        return x
 
-class UNet1D(nn.Module):
-    def __init__(self, in_ecg=1, embed_dim=EMBED_DIM, use_bn=False, p_drop=0.0):
+class StackEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
         super().__init__()
-        in_total = in_ecg + embed_dim
-        filters = [32, 64, 128, 256, 512]  # Deeper for 5000 length
+        self.conv1 = ConvBnRelu1d(in_channels, out_channels, kernel_size, padding)
+        self.conv2 = ConvBnRelu1d(out_channels, out_channels, kernel_size, padding)
+        self.pool = nn.MaxPool1d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        return x, self.pool(x)
+
+class StackDecoder3p(nn.Module):
+    def __init__(self, in_channels, skip_channels, out_channels, kernel_size=3, padding=1):
+        super().__init__()
+        self.conv_layers = nn.ModuleList([nn.Conv1d(ic, skip_channels, kernel_size, padding) for ic in in_channels])
+        self.aggregate = ConvBnRelu1d(skip_channels * len(in_channels), out_channels, kernel_size, padding)
+
+    def forward(self, *features):
+        aggregated = []
+        for conv, feat in zip(self.conv_layers, features):
+            aggregated.append(conv(feat))
+        x = torch.cat(aggregated, dim=1)
+        x = self.aggregate(x)
+        return x
+
+class UNet3p(nn.Module):
+    def __init__(self, n_channels=4, embed_dim=EMBED_DIM, use_bn=True, p_drop=0.2):
+        super().__init__()
+        filters = [n_channels * (2 ** n) for n in range(5)]  # [4,8,16,32,64]
+        filters_skip = filters[0]  # 4
+        filters_decoder = filters_skip * 5  # 20
+        in_total = 1 + embed_dim  # ECG + embed
         self.rhythm_embed = nn.Embedding(NUM_RHYTHMS, embed_dim)
 
-        # Encoder
-        self.enc1 = ConvBlock1D(in_total, filters[0], use_bn, p_drop)
-        self.enc2 = ConvBlock1D(filters[0], filters[1], use_bn, p_drop)
-        self.enc3 = ConvBlock1D(filters[1], filters[2], use_bn, p_drop)
-        self.enc4 = ConvBlock1D(filters[2], filters[3], use_bn, p_drop)
-        self.enc5 = ConvBlock1D(filters[3], filters[4], use_bn, p_drop)
-        self.pool = nn.MaxPool1d(2, 2)
+        self.down1 = StackEncoder(in_total, filters[0])
+        self.down2 = StackEncoder(filters[0], filters[1])
+        self.down3 = StackEncoder(filters[1], filters[2])
+        self.down4 = StackEncoder(filters[2], filters[3])
+        self.middle = nn.Sequential(ConvBnRelu1d(filters[3], filters[4]), ConvBnRelu1d(filters[4], filters[4]))
 
-        # Decoder
-        self.up5 = nn.ConvTranspose1d(filters[4], filters[3], 2, 2)
-        self.dec5 = ConvBlock1D(filters[3] + filters[3], filters[3], use_bn, p_drop)
-        self.up4 = nn.ConvTranspose1d(filters[3], filters[2], 2, 2)
-        self.dec4 = ConvBlock1D(filters[2] + filters[2], filters[2], use_bn, p_drop)
-        self.up3 = nn.ConvTranspose1d(filters[2], filters[1], 2, 2)
-        self.dec3 = ConvBlock1D(filters[1] + filters[1], filters[1], use_bn, p_drop)
-        self.up2 = nn.ConvTranspose1d(filters[1], filters[0], 2, 2)
-        self.dec2 = ConvBlock1D(filters[0] + filters[0], filters[0], use_bn, p_drop)
-        self.out = nn.Conv1d(filters[0], NUM_CLASSES, kernel_size=1)
+        self.up4 = StackDecoder3p(filters, filters_skip, filters_decoder)
+        self.up3 = StackDecoder3p(filters[:3] + [filters_decoder] + filters[4:], filters_skip, filters_decoder)
+        self.up2 = StackDecoder3p(filters[:2] + [filters_decoder] * 2 + filters[4:], filters_skip, filters_decoder)
+        self.up1 = StackDecoder3p(filters[:1] + [filters_decoder] * 3 + filters[4:], filters_skip, filters_decoder)
+        self.segment = nn.Conv1d(filters_decoder, NUM_CLASSES, kernel_size=1)
 
         for m in self.modules():
-            if isinstance(m, (nn.Conv1d, nn.ConvTranspose1d)):
+            if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
-        # Calculate padding to nearest multiple of 16 (for 4 pools)
-        pool_factor = 16  # Based on 4 MaxPool2d layers
-        pad_total = ((L + pool_factor - 1) // pool_factor) * pool_factor - L
-        pad_left = pad_total // 2
-        pad_right = pad_total - pad_left
-        x_ecg_padded = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
+        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)
+        x = torch.cat([x_ecg, embed], dim=1)
 
-        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg_padded.size(2))
-        x = torch.cat([x_ecg_padded, embed], dim=1)
+        # Encoder
+        X_enc1, x = self.down1(x)
+        X_enc2, x = self.down2(x)
+        X_enc3, x = self.down3(x)
+        X_enc4, x = self.down4(x)
+        X_enc5 = self.middle(x)
 
-        # Encoder with length tracking
-        e1 = self.enc1(x)
-        e2 = self.enc2(self.pool(e1))
-        e3 = self.enc3(self.pool(e2))
-        e4 = self.enc4(self.pool(e3))
-        e5 = self.enc5(self.pool(e4))
-
-        # Decoder with precise length restoration
-        d5 = self.up5(e5)
-        crop_amount = d5.size(2) - e4.size(2)  # Adjust for pooling mismatch
-        if crop_amount > 0:
-            crop_left = crop_amount // 2
-            crop_right = crop_amount - crop_left
-            e4 = F.pad(e4, (crop_left, crop_right), mode='replicate')
-        d5 = self.dec5(torch.cat([d5, e4], dim=1))
-        d4 = self.up4(d5)
-        crop_amount = d4.size(2) - e3.size(2)
-        if crop_amount > 0:
-            crop_left = crop_amount // 2
-            crop_right = crop_amount - crop_left
-            e3 = F.pad(e3, (crop_left, crop_right), mode='replicate')
-        d4 = self.dec4(torch.cat([d4, e3], dim=1))
-        d3 = self.up3(d4)
-        crop_amount = d3.size(2) - e2.size(2)
-        if crop_amount > 0:
-            crop_left = crop_amount // 2
-            crop_right = crop_amount - crop_left
-            e2 = F.pad(e2, (crop_left, crop_right), mode='replicate')
-        d3 = self.dec3(torch.cat([d3, e2], dim=1))
-        d2 = self.up2(d3)
-        crop_amount = d2.size(2) - e1.size(2)
-        if crop_amount > 0:
-            crop_left = crop_amount // 2
-            crop_right = crop_amount - crop_left
-            e1 = F.pad(e1, (crop_left, crop_right), mode='replicate')
-        d2 = self.dec2(torch.cat([d2, e1], dim=1))
-        seg_logits = self.out(d2)
-        seg_logits = torch.clamp(seg_logits, -100, 100)
+        # Decoder with full-scale skips
+        X_dec5 = X_enc5
+        X_dec4 = self.up4(
+            F.max_pool1d(X_enc1, kernel_size=8, stride=8),
+            F.max_pool1d(X_enc2, kernel_size=4, stride=4),
+            F.max_pool1d(X_enc3, kernel_size=2, stride=2),
+            X_enc4,
+            F.interpolate(X_dec5, size=X_enc4.shape[-1], mode='linear', align_corners=False)
+        )
+        X_dec3 = self.up3(
+            F.max_pool1d(X_enc1, kernel_size=4, stride=4),
+            F.max_pool1d(X_enc2, kernel_size=2, stride=2),
+            X_enc3,
+            F.interpolate(X_dec4, size=X_enc3.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec5, size=X_enc3.shape[-1], mode='linear', align_corners=False)
+        )
+        X_dec2 = self.up2(
+            F.max_pool1d(X_enc1, kernel_size=2, stride=2),
+            X_enc2,
+            F.interpolate(X_dec3, size=X_enc2.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec4, size=X_enc2.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec5, size=X_enc2.shape[-1], mode='linear', align_corners=False)
+        )
+        X_dec1 = self.up1(
+            X_enc1,
+            F.interpolate(X_dec2, size=X_enc1.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec3, size=X_enc1.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec4, size=X_enc1.shape[-1], mode='linear', align_corners=False),
+            F.interpolate(X_dec5, size=X_enc1.shape[-1], mode='linear', align_corners=False)
+        )
+        seg_logits = self.segment(X_dec1)
 
         # Pre-softmax P suppression if rhythm in P_ABSENT and suppress_p
         if suppress_p:
@@ -105,8 +122,5 @@ class UNet1D(nn.Module):
                 if rid[i].item() in P_ABSENT_IDS:
                     mask[i] = True
             seg_logits[mask, 1, :] = -1e9  # Low value for P channel
-
-        # Crop back to original L
-        seg_logits = seg_logits[:, :, pad_left:pad_left + L]
 
         return seg_logits
