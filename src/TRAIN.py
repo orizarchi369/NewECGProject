@@ -22,6 +22,11 @@ def train_epoch(model, loader, opt, scaler, device, args, class_weights, train_l
         opt.zero_grad()
         with torch.amp.autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
             seg_logits = model(sig, rid)
+            diff = lab.size(1) - seg_logits.size(2)
+            if diff > 0:
+                start = diff // 2
+                lab = lab[:, start:start + seg_logits.size(2)]
+                msk = msk[:, start:start + msk.size(1) - diff]
             loss_ce = ce_loss_masked(seg_logits, lab, msk, class_weights, p_absent_mask)
             loss_dice = dice_loss_multiclass_masked(seg_logits, lab, msk, args.dice_exclude_bg, p_absent_mask)
             if args.seg_loss == 'dicece':
@@ -47,6 +52,11 @@ def evaluate_val(model, loader, args, device, class_weights):
         for sig, lab, rid, msk, _ in loader:
             sig, lab, rid, msk = sig.to(device), lab.to(device), rid.to(device), msk.to(device).bool()
             seg_logits = model(sig, rid, suppress_p=True)  # Suppress during eval
+            diff = lab.size(1) - seg_logits.size(2)
+            if diff > 0:
+                start = diff // 2
+                lab = lab[:, start:start + seg_logits.size(2)]
+                msk = msk[:, start:start + msk.size(1) - diff]
             pred = torch.argmax(seg_logits, dim=1).cpu().numpy()
             lab = lab.cpu().numpy(); msk = msk.cpu().numpy()
             for b in range(sig.size(0)):
