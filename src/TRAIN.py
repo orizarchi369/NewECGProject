@@ -81,6 +81,7 @@ def train_model(args, splits):
 
     best_metric = -1.0
     log_csv = os.path.join(args.output_dir, "train_log.csv")
+    os.makedirs(args.output_dir, exist_ok=True)
     with open(log_csv, "w") as f:
         f.write("epoch,lr,train_loss,macro_f1\n")
 
