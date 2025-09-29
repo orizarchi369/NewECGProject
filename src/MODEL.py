@@ -84,7 +84,7 @@ class UNet3p(nn.Module):
         pad_left = pad_total // 2
         pad_right = pad_total - pad_left
         x_ecg = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
-        print(f"Padded length: {x_ecg.shape[-1]}")
+        #print(f"Padded length: {x_ecg.shape[-1]}")
         embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg.size(2))
         x = torch.cat([x_ecg, embed], dim=1)
 
