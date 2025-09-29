@@ -16,25 +16,33 @@ def parse_record_and_rhythm_from_name(filename):
 TYPE2CLASS = {0: CLASS_P, 1: CLASS_QRS, 2: CLASS_T}
 
 def parse_annotations(ann_path):
-    """Parse 'TYPE,START,END' TXT into a [SIGNAL_LENGTH] label array (END inclusive)."""
+    """
+    Parse 'TYPE,START,END' rows into a [SIGNAL_LENGTH] label array.
+    START/END may appear as floats (e.g., '160.0'); END is inclusive.
+    """
     labels = np.zeros(SIGNAL_LENGTH, dtype=np.int64)
-    with open(ann_path, 'r', newline='') as f:
-        rdr = csv.reader(f)
-        first = next(rdr, None)
-        # Detect header
-        has_header = first and any(x.strip().isalpha() for x in first)
-        rows = rdr if has_header else ([first] if first else [])
-        for row in rows:
-            if not row:
+    with open(ann_path, "r") as f:
+        for ln in f:
+            ln = ln.strip()
+            if not ln:
                 continue
-            t, s, e = int(row[0]), int(row[1]), int(row[2])
+            parts = [p.strip() for p in ln.split(",")]
+            if parts[0].upper() == "TYPE":  # header
+                continue
+            if len(parts) < 3:
+                continue
+            try:
+                t = int(float(parts[0]))
+                s = int(round(float(parts[1])))
+                e = int(round(float(parts[2])))
+            except ValueError:
+                continue
             c = TYPE2CLASS.get(t)
             if c is None:
                 continue
-            s = max(0, s)
-            e = min(SIGNAL_LENGTH - 1, e)  # END is inclusive in your files
+            s = max(0, s); e = min(SIGNAL_LENGTH - 1, e)
             if e >= s:
-                labels[s:e+1] = c
+                labels[s:e+1] = c  # END inclusive
     return labels
 
 def load_splits(split_dir):
