@@ -34,16 +34,20 @@ class StackEncoder(nn.Module):
 class StackDecoder3p(nn.Module):
     def __init__(self, in_channels, skip_channels, out_channels, kernel_size=3, padding=1):
         super().__init__()
-        self.conv_layers = nn.ModuleList([nn.Conv1d(ic, skip_channels, kernel_size, padding) for ic in in_channels])
+        # IMPORTANT: use keyword args so 'padding' is actually padding (not stride)
+        self.conv_layers = nn.ModuleList([
+            nn.Conv1d(in_ch, skip_channels, kernel_size=kernel_size, stride=1, padding=padding, bias=True)
+            for in_ch in in_channels
+        ])
         self.aggregate = ConvBnRelu1d(skip_channels * len(in_channels), out_channels, kernel_size, padding)
 
     def forward(self, *features):
-        aggregated = []
-        for conv, feat in zip(self.conv_layers, features):
-            aggregated.append(conv(feat))
-        x = torch.cat(aggregated, dim=1)
+        # Call sites already pool/interpolate so all features have the same length
+        projected = [conv(feat) for conv, feat in zip(self.conv_layers, features)]
+        x = torch.cat(projected, dim=1)
         x = self.aggregate(x)
         return x
+
 
 class UNet3p(nn.Module):
     def __init__(self, n_channels=4, embed_dim=EMBED_DIM):
