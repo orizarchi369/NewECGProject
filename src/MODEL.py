@@ -1,11 +1,11 @@
-# src/MODEL.py with padding to 5120 for even pooling, and debugging prints
+# src/MODEL.py with paper's kernel=9, padding=4 for length preservation
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from CONFIG import EMBED_DIM, NUM_RHYTHMS, NUM_CLASSES, P_ABSENT_IDS
 
 class ConvBnRelu1d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
+    def __init__(self, in_channels, out_channels, kernel_size=9, padding=4):
         super().__init__()
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
         self.bn = nn.BatchNorm1d(out_channels)
@@ -20,7 +20,7 @@ class ConvBnRelu1d(nn.Module):
         return x
 
 class StackEncoder(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
+    def __init__(self, in_channels, out_channels, kernel_size=9, padding=4):
         super().__init__()
         self.conv1 = ConvBnRelu1d(in_channels, out_channels, kernel_size, padding)
         self.conv2 = ConvBnRelu1d(out_channels, out_channels, kernel_size, padding)
@@ -32,7 +32,7 @@ class StackEncoder(nn.Module):
         return x, self.pool(x)
 
 class StackDecoder3p(nn.Module):
-    def __init__(self, in_channels, skip_channels, out_channels, kernel_size=3, padding=1):
+    def __init__(self, in_channels, skip_channels, out_channels, kernel_size=9, padding=4):
         super().__init__()
         self.conv_layers = nn.ModuleList([nn.Conv1d(ic, skip_channels, kernel_size, padding) for ic in in_channels])
         self.aggregate = ConvBnRelu1d(skip_channels * len(in_channels), out_channels, kernel_size, padding)
@@ -75,16 +75,10 @@ class UNet3p(nn.Module):
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
         print(f"Input length: {L}")
-        # Pad to 5120 (next multiple of 32 for 5 levels)
-        pad_total = 5120 - L
-        pad_left = pad_total // 2
-        pad_right = pad_total - pad_left
-        x_ecg = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
-        print(f"Padded length: {x_ecg.shape[-1]}")
-        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg.size(2))
+        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)
         x = torch.cat([x_ecg, embed], dim=1)
 
-        # Encoder with prints
+        # Encoder
         X_enc1, x = self.down1(x)
         print(f"X_enc1 length: {X_enc1.shape[-1]}")
         X_enc2, x = self.down2(x)
@@ -96,7 +90,7 @@ class UNet3p(nn.Module):
         X_enc5 = self.middle(x)
         print(f"X_enc5 length: {X_enc5.shape[-1]}")
 
-        # Decoder with prints
+        # Decoder
         X_dec5 = X_enc5
         X_dec4 = self.up4(
             F.max_pool1d(X_enc1, kernel_size=8, stride=8),
@@ -132,10 +126,6 @@ class UNet3p(nn.Module):
         print(f"X_dec1 length: {X_dec1.shape[-1]}")
         seg_logits = self.segment(X_dec1)
         print(f"seg_logits length: {seg_logits.shape[-1]}")
-
-        # Crop back to original L
-        seg_logits = seg_logits[:, :, pad_left:pad_left + L]
-        print(f"Cropped logits length: {seg_logits.shape[-1]}")
 
         # Pre-softmax P suppression
         if suppress_p:
