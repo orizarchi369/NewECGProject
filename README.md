@@ -44,7 +44,7 @@ These steps ensure that the model learns from clean and standardized signals, im
 
 ## Model
 
-The model is based on a **U-Net–like convolutional architecture for 1D sequences**, which has been widely used in ECG delineation research. The encoder progressively downsamples the signal, extracting increasingly abstract temporal features, while the decoder upsamples and fuses these features with skip connections to reconstruct onset/offset predictions at the original resolution.  
+The model extends the standard 1D U-Net design by incorporating **dense skip connections** across **multiple scales**. Instead of connecting only encoder and decoder layers at the same depth, each decoder block aggregates features from several encoder levels and, in some cases, from deeper decoder outputs. This richer fusion of multi-scale features allows the model to better capture both fine-grained wave boundaries and broader temporal context, which is important for delineating ECG signals with varying morphologies. 
 
 ### Rhythm-type conditioning
 A key modification is the addition of **rhythm-type conditioning**:
@@ -109,6 +109,7 @@ Evaluation is performed on the test set, with metrics calculated for each wave t
 
 ## Repository Structure
 
+```text
 src/
 ├─ CONFIG.py       # argument parsing, dataset paths, rhythm definitions
 ├─ DATASET.py      # ECG dataset loader, annotation parsing
