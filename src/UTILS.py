@@ -16,33 +16,30 @@ def parse_record_and_rhythm_from_name(filename):
 TYPE2CLASS = {0: CLASS_P, 1: CLASS_QRS, 2: CLASS_T}
 
 def parse_annotations(ann_path):
-    """
-    Parse 'TYPE,START,END' rows into a [SIGNAL_LENGTH] label array.
-    START/END may appear as floats (e.g., '160.0'); END is inclusive.
-    """
+    """Read rows 'TYPE,START,END' (END inclusive). Robust to floats, commas/whitespace, BOM, blanks."""
     labels = np.zeros(SIGNAL_LENGTH, dtype=np.int64)
-    with open(ann_path, "r") as f:
+    with open(ann_path, "r", encoding="utf-8-sig") as f:
         for ln in f:
             ln = ln.strip()
             if not ln:
                 continue
-            parts = [p.strip() for p in ln.split(",")]
-            if parts[0].upper() == "TYPE":  # header
-                continue
+            parts = re.split(r"[,\s]+", ln)
             if len(parts) < 3:
                 continue
+            # Try parse; if it's a header or junk line, skip
             try:
-                t = int(float(parts[0]))
+                t = int(round(float(parts[0])))
                 s = int(round(float(parts[1])))
                 e = int(round(float(parts[2])))
-            except ValueError:
+            except Exception:
                 continue
             c = TYPE2CLASS.get(t)
             if c is None:
                 continue
-            s = max(0, s); e = min(SIGNAL_LENGTH - 1, e)
+            s = max(0, s)
+            e = min(SIGNAL_LENGTH - 1, e)
             if e >= s:
-                labels[s:e+1] = c  # END inclusive
+                labels[s:e+1] = c
     return labels
 
 def load_splits(split_dir):
