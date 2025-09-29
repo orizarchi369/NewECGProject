@@ -1,9 +1,10 @@
 import json
 import os
 import re
+import csv
 import numpy as np
 import torch
-from CONFIG import RHYTHM_TO_ID, FS, SIGNAL_LENGTH, P_ABSENT_IDS, DRIVE_DATA_DIR, DRIVE_ANN_DIR, DRIVE_SPLIT_DIR, DRIVE_OUTPUT_DIR
+from CONFIG import RHYTHM_TO_ID, FS, SIGNAL_LENGTH, P_ABSENT_IDS, DRIVE_DATA_DIR, DRIVE_ANN_DIR, DRIVE_SPLIT_DIR, DRIVE_OUTPUT_DIR, CLASS_P, CLASS_QRS, CLASS_T, SIGNAL_LENGTH
 
 def parse_record_and_rhythm_from_name(filename):
     base = os.path.basename(filename)
@@ -12,33 +13,28 @@ def parse_record_and_rhythm_from_name(filename):
     rhythm = m.group(1) if m else None
     return rec, rhythm
 
-def parse_annotations(ann_path, lead='ii'):
-    """Parse TXT annotation for lead II to label array [5000]."""
+TYPE2CLASS = {0: CLASS_P, 1: CLASS_QRS, 2: CLASS_T}
+
+def parse_annotations(ann_path):
+    """Parse 'TYPE,START,END' TXT into a [SIGNAL_LENGTH] label array (END inclusive)."""
     labels = np.zeros(SIGNAL_LENGTH, dtype=np.int64)
-    with open(ann_path, 'r') as f:
-        lines = f.readlines()
-    for line in lines:
-        parts = line.strip().split()
-        if len(parts) < 3 or parts[2] != lead: continue  # Skip non-lead II
-        sample = int(parts[0])
-        symbol = parts[1]
-        if symbol == '(':
-            # Onset
-            cur_class = None
-        elif symbol == ')':
-            # Offset, fill from onset to offset
-            if cur_class is not None:
-                labels[start:sample+1] = cur_class
-            cur_class = None
-        else:
-            # Peak, set class
-            if symbol == 'p':
-                cur_class = 1  # P
-            elif symbol == 'N':
-                cur_class = 2  # QRS
-            elif symbol == 't':
-                cur_class = 3  # T
-            start = sample  # Assume onset before peak, but TXT has ( onset, peak, ) offset
+    with open(ann_path, 'r', newline='') as f:
+        rdr = csv.reader(f)
+        first = next(rdr, None)
+        # Detect header
+        has_header = first and any(x.strip().isalpha() for x in first)
+        rows = rdr if has_header else ([first] if first else [])
+        for row in rows:
+            if not row:
+                continue
+            t, s, e = int(row[0]), int(row[1]), int(row[2])
+            c = TYPE2CLASS.get(t)
+            if c is None:
+                continue
+            s = max(0, s)
+            e = min(SIGNAL_LENGTH - 1, e)  # END is inclusive in your files
+            if e >= s:
+                labels[s:e+1] = c
     return labels
 
 def load_splits(split_dir):

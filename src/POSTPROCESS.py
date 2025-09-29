@@ -78,11 +78,11 @@ def extract_boundaries(labels):
             d[cname] = idxs
         else:
             idxs = []
-            idxs = idxs[::-1]  # Reverse to sorted
             for i in range(L-1, -1, -1):
                 cur = labels[i]
                 if cur == c and (i == L-1 or labels[i+1] != c):
                     idxs.append(i)
+            idxs = idxs[::-1]  # make ascending
             d[cname] = idxs
     return d
 
