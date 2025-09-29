@@ -1,4 +1,4 @@
-# src/MODEL.py with internal debugging prints for length tracking
+# src/MODEL.py with padding to 5120 for even pooling, and debugging prints
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -75,7 +75,13 @@ class UNet3p(nn.Module):
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
         print(f"Input length: {L}")
-        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, L)
+        # Pad to 5120 (next multiple of 32 for 5 levels)
+        pad_total = 5120 - L
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        x_ecg = F.pad(x_ecg, (pad_left, pad_right), mode='replicate')
+        print(f"Padded length: {x_ecg.shape[-1]}")
+        embed = self.rhythm_embed(rid).unsqueeze(-1).expand(-1, -1, x_ecg.size(2))
         x = torch.cat([x_ecg, embed], dim=1)
 
         # Encoder with prints
@@ -126,6 +132,10 @@ class UNet3p(nn.Module):
         print(f"X_dec1 length: {X_dec1.shape[-1]}")
         seg_logits = self.segment(X_dec1)
         print(f"seg_logits length: {seg_logits.shape[-1]}")
+
+        # Crop back to original L
+        seg_logits = seg_logits[:, :, pad_left:pad_left + L]
+        print(f"Cropped logits length: {seg_logits.shape[-1]}")
 
         # Pre-softmax P suppression
         if suppress_p:
