@@ -108,15 +108,16 @@ Evaluation is performed on the test set, with metrics calculated for each wave t
 ---
 
 ## Repository Structure
+```python
 src/
-- CONFIG.py # argument parsing, dataset paths, rhythm definitions
-- DATASET.py # ECG dataset loader, annotation parsing
-- MODEL.py # 1D U-Net variant with rhythm conditioning
-- TRAIN.py # training loop with loss, optimizer, logging
-- EVAL.py # evaluation on test set, metric computation
-- METRICS.py # sensitivity, PPV, F1, timing error calculations
-- POSTPROCESS.py # cleanup rules for predictions
-- UTILS.py # helper functions (filters, parsing, etc.)
+   CONFIG.py # argument parsing, dataset paths, rhythm definitions
+   DATASET.py # ECG dataset loader, annotation parsing
+   MODEL.py # 1D U-Net variant with rhythm conditioning
+   TRAIN.py # training loop with loss, optimizer, logging
+   EVAL.py # evaluation on test set, metric computation
+   METRICS.py # sensitivity, PPV, F1, timing error calculations
+   POSTPROCESS.py # cleanup rules for predictions
+   UTILS.py # helper functions (filters, parsing, etc.)
 
 
 ---
