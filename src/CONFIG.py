@@ -63,16 +63,16 @@ DEFAULTS = {
     "model_path": None  # For eval, path to checkpoint
 }
 
-def get_args():
-    parser = argparse.ArgumentParser(description="ECG Delineation with Rhythm Conditioning")
+def get_args(argv=None):
+    parser = argparse.ArgumentParser(description="ECG Delineation with Rhythm Conditioning", add_help=True)
     for key, val in DEFAULTS.items():
         if isinstance(val, bool):
             parser.add_argument(f"--{key}", action="store_true" if val else "store_false", default=val)
         else:
             parser.add_argument(f"--{key}", type=type(val) if val is not None else str, default=val)
-    # Path overrides
     parser.add_argument("--data_dir", default=DATA_DIR)
     parser.add_argument("--ann_dir", default=ANN_DIR)
     parser.add_argument("--split_dir", default=SPLIT_DIR)
     parser.add_argument("--output_dir", default=OUTPUT_DIR)
-    return parser.parse_args()
+    args, _ = parser.parse_known_args(argv)  # <-- key change
+    return args
