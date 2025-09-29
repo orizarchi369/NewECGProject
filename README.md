@@ -13,13 +13,13 @@ Dataset reference: [Resting ECG Segmentation Dataset (RDB) – figshare, 2024](h
 - Each recording has an accompanying annotation file specifying the onset and offset indices of P waves, QRS complexes, and T waves.  
 - **Records used here:** 2278 recordings.  Atrial Tachycardia (AT) cases (121 recordings) were removed.
 - **Rhythms covered (7 types):**  
-  - AF (Atrial Flutter)  
-  - AFIB (Atrial Fibrillation)  
-  - SB (Sinus Bradycardia)  
-  - SI (Sinus Irregularity)  
-  - SR (Sinus Rhythm = Healthy)  
-  - ST (Sinus Tachycardia)  
-  - VT (Supraventricular Tachycardia)  
+   - AF (Atrial Flutter):               400
+   - AFIB (Atrial Fibrillation):        400
+   - SB (Sinus Bradycardia):            400
+   - SI (Sinus Irregularity):           399
+   - SR (Sinus Rhythm):                 400
+   - ST (Sinus Tachycardia):            140
+   - VT (Supraventricular Tachycardia): 139
 
 ### Notes on wave presence
 - In this dataset, **AF and AFIB** signals do not contain annotations for P waves. 
