@@ -78,7 +78,7 @@ class UNet3p(nn.Module):
 
     def forward(self, x_ecg, rid, suppress_p=False):
         B, _, L = x_ecg.shape
-        print(f"Input length: {L}")
+        #print(f"Input length: {L}")
         # Pad to 5120 (next multiple of 32 for 5 levels)
         pad_total = 5120 - L
         pad_left = pad_total // 2
@@ -90,15 +90,15 @@ class UNet3p(nn.Module):
 
         # Encoder with prints
         X_enc1, x = self.down1(x)
-        print(f"X_enc1 length: {X_enc1.shape[-1]}")
+        #print(f"X_enc1 length: {X_enc1.shape[-1]}")
         X_enc2, x = self.down2(x)
-        print(f"X_enc2 length: {X_enc2.shape[-1]}")
+        #print(f"X_enc2 length: {X_enc2.shape[-1]}")
         X_enc3, x = self.down3(x)
-        print(f"X_enc3 length: {X_enc3.shape[-1]}")
+        #print(f"X_enc3 length: {X_enc3.shape[-1]}")
         X_enc4, x = self.down4(x)
-        print(f"X_enc4 length: {X_enc4.shape[-1]}")
+        #print(f"X_enc4 length: {X_enc4.shape[-1]}")
         X_enc5 = self.middle(x)
-        print(f"X_enc5 length: {X_enc5.shape[-1]}")
+        #print(f"X_enc5 length: {X_enc5.shape[-1]}")
 
         # Decoder with prints
         X_dec5 = X_enc5
@@ -109,7 +109,7 @@ class UNet3p(nn.Module):
             X_enc4,
             F.interpolate(X_dec5, size=X_enc4.shape[-1], mode='linear', align_corners=False)
         )
-        print(f"X_dec4 length: {X_dec4.shape[-1]}")
+        #print(f"X_dec4 length: {X_dec4.shape[-1]}")
         X_dec3 = self.up3(
             F.max_pool1d(X_enc1, kernel_size=4, stride=4),
             F.max_pool1d(X_enc2, kernel_size=2, stride=2),
@@ -117,7 +117,7 @@ class UNet3p(nn.Module):
             F.interpolate(X_dec4, size=X_enc3.shape[-1], mode='linear', align_corners=False),
             F.interpolate(X_dec5, size=X_enc3.shape[-1], mode='linear', align_corners=False)
         )
-        print(f"X_dec3 length: {X_dec3.shape[-1]}")
+        #print(f"X_dec3 length: {X_dec3.shape[-1]}")
         X_dec2 = self.up2(
             F.max_pool1d(X_enc1, kernel_size=2, stride=2),
             X_enc2,
@@ -125,7 +125,7 @@ class UNet3p(nn.Module):
             F.interpolate(X_dec4, size=X_enc2.shape[-1], mode='linear', align_corners=False),
             F.interpolate(X_dec5, size=X_enc2.shape[-1], mode='linear', align_corners=False)
         )
-        print(f"X_dec2 length: {X_dec2.shape[-1]}")
+        #print(f"X_dec2 length: {X_dec2.shape[-1]}")
         X_dec1 = self.up1(
             X_enc1,
             F.interpolate(X_dec2, size=X_enc1.shape[-1], mode='linear', align_corners=False),
@@ -133,13 +133,13 @@ class UNet3p(nn.Module):
             F.interpolate(X_dec4, size=X_enc1.shape[-1], mode='linear', align_corners=False),
             F.interpolate(X_dec5, size=X_enc1.shape[-1], mode='linear', align_corners=False)
         )
-        print(f"X_dec1 length: {X_dec1.shape[-1]}")
+        #print(f"X_dec1 length: {X_dec1.shape[-1]}")
         seg_logits = self.segment(X_dec1)
-        print(f"seg_logits length: {seg_logits.shape[-1]}")
+        #print(f"seg_logits length: {seg_logits.shape[-1]}")
 
         # Crop back to original L
         seg_logits = seg_logits[:, :, pad_left:pad_left + L]
-        print(f"Cropped logits length: {seg_logits.shape[-1]}")
+        #print(f"Cropped logits length: {seg_logits.shape[-1]}")
 
         # Pre-softmax P suppression
         if suppress_p:
