@@ -11,7 +11,7 @@ Dataset reference: [Resting ECG Segmentation Dataset (RDB) – figshare, 2024](h
 - The original dataset contains **2399 12-lead ECG recordings**, each 10 seconds long and sampled at 500 Hz (5000 samples per record).  
 - In this project, **only Lead II** from each recording is used for training and evaluation.  
 - Each recording has an accompanying annotation file specifying the onset and offset indices of P waves, QRS complexes, and T waves.  
-- **Records used here:** 2278 recordings.  Atrial Tachycardia (AT) cases (121 recordings) were removed.
+- **Records used here:** 2278 recordings.  Atrial Tachycardia (AT) cases (121 recordings) were removed. 
 - **Rhythms covered (7 types):**  
    - AF (Atrial Flutter): 400
    - AFIB (Atrial Fibrillation): 400
