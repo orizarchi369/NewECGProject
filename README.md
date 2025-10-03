@@ -161,10 +161,10 @@ src/
 F1-scores for onset and offset detection of P waves, QRS complexes, and T waves across seven rhythm types. 
 Results show excellent performance: >0.98 for P/QRS delineation and >0.93 for T waves. 
 “NA” appears for rhythms that lack P waves (AF, AFIB, VT).
-![F1](Visualizations/F1 _Table.png)
+![F1](Visualizations/F1_Table.png)
 
 Standard deviation of onset/offset timing errors in milliseconds across rhythm types. Results show high temporal precision, with average variability of ~17 ms for P waves, ~6 ms for QRS, and ~16–35 ms for T waves, demonstrating the model’s consistency across diverse arrhythmias.
-![std](Visualizations/std _Table.png)
+![std](Visualizations/std_Table.png)
 
 ### Example Visualizations
 
