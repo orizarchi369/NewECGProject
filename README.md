@@ -156,9 +156,11 @@ src/
 
 ## Example Visualization
 
-The figure below shows ground truth annotations (top) compared to model predictions (bottom) for a sample of Sinus Bradycardia. Note that the model correctly identifies the full P–QRS–T cycle, even in cases where annotations are incomplete.
+The figure below shows ground truth annotations (top) compared to model predictions (bottom) for a sample of Sinus Bradycardia. Note that the model correctly identified the first and last heartbeats. These correct predictions were not present in the annotations and therefore counted as a false positive, slightly lowering the reported F1 despite being clinically accurate.
 
-(Figures and test metrics table will be added soon)
+![Atrial Flutter Example](Visualizations/SB_SB0132_lead_ii_processed.csv_vis.png)
+
+
 ---
 
 ## Summary
