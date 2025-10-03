@@ -154,12 +154,25 @@ src/
 
 ---
 
-## Example Visualization
+## Results
+
+### Performance on the Test Set
+
+F1-scores for onset and offset detection of P waves, QRS complexes, and T waves across seven rhythm types. 
+Results show excellent performance: >0.98 for P/QRS delineation and >0.93 for T waves. 
+“NA” appears for rhythms that lack P waves (AF, AFIB, VT).
+![F1](Visualizations/F1 _Table.png)
+
+Standard deviation of onset/offset timing errors in milliseconds across rhythm types. Results show high temporal precision, with average variability of ~17 ms for P waves, ~6 ms for QRS, and ~16–35 ms for T waves, demonstrating the model’s consistency across diverse arrhythmias.
+![std](Visualizations/std _Table.png)
+
+### Example Visualizations
 
 The figure below shows ground truth annotations (top) compared to model predictions (bottom) for a sample of Sinus Bradycardia. Note that the model correctly identified the first and last heartbeats. These correct predictions were not present in the annotations and therefore counted as a false positive, slightly lowering the reported F1 despite being clinically accurate.
+![Sinus Bradycardia Example](Visualizations/SB_SB0132_lead_ii_processed.csv_vis.png)
 
-![Atrial Flutter Example](Visualizations/SB_SB0132_lead_ii_processed.csv_vis.png)
-
+The following figure shows the result for a sample of Atrial Flutter (AF). In AF, no discernible P waves are present. During training and evaluation, the model was conditioned not to predict P waves for AF, and the results confirm that this approach worked as intended.
+![Atrial Flutter Example](Visualizations/AF_AF0150_lead_ii_processed.csv_vis.png)
 
 ---
 
